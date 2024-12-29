@@ -80,7 +80,7 @@ const signinUser = async (req, res) => {
                 message: "Invalid password, please try again" 
             });
         }
-        console.log(user.rows[0].id);
+        console.log(user.rows[0].id); 
         const token = generateToken( user.rows[0].id);
         user.rows[0].token = token;
 

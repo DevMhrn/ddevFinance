@@ -7,9 +7,9 @@ import authRoutes from './authRoutes.js';
 
 const router = express.Router();
 
-// router.use('/users', userRoutes);
-// router.use('/accounts', accountRoutes);
-// router.use('/transactions', transactionRoutes);
+router.use('/users', userRoutes);
+router.use('/accounts', accountRoutes);
+router.use('/transactions', transactionRoutes);
 router.use('/auth', authRoutes);
 
 
