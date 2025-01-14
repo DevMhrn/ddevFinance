@@ -52,6 +52,8 @@ export async function fetchCountries() {
           country: country.name?.common || "",
           flag: country.flags?.png || "",
           currency: currencyCode || "",
+          cca2: country.cca2 || "", // ISO 3166-1 alpha-2 code
+          currencySymbol: currencies[currencyCode]?.symbol || "$"
         };
       });
 

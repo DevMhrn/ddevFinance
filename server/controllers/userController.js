@@ -35,37 +35,37 @@ export const updateUser = async (req, res) => {
         const { userId } = req.body.user;
         const { firstname, lastname, email, contact, currency, country } = req.body;
 
-        // Validate currency and country
+        // Validate input fields first
         if (currency && currency.length > 3) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 status: false,
-                message: "Currency code too long" 
+                message: "Currency code too long"
             });
         }
 
         if (country && country.length !== 2) {
-            return res.status(400).json({ 
+            return res.status(400).json({
                 status: false,
-                message: "Country code must be 2 characters long" 
+                message: "Country code must be 2 characters long"
             });
         }
 
         // Check if email exists but exclude current user
         if (email) {
-            const existingEmail = await pool.query({
-                text: 'SELECT * FROM tbluser WHERE email = $1 AND id != $2',
-                values: [email, userId]
-            });
+            const existingEmail = await pool.query(
+                'SELECT * FROM tbluser WHERE email = $1 AND id != $2',
+                [email, userId]
+            );
 
             if (existingEmail.rows.length > 0) {
-                return res.status(400).json({ 
+                return res.status(400).json({
                     status: false,
-                    message: "Email already exists" 
+                    message: "Email already exists"
                 });
             }
         }
 
-        // Only update fields that are provided
+        // Prepare update query
         const updates = [];
         const values = [];
         let valueCount = 1;
@@ -77,19 +77,30 @@ export const updateUser = async (req, res) => {
         if (currency) { updates.push(`currency = $${valueCount}`); values.push(currency); valueCount++; }
         if (country) { updates.push(`country = $${valueCount}`); values.push(country); valueCount++; }
 
+        // Check if there are any fields to update
+        console.log('Updates:', updates);
+        if (updates.length === 0) {
+            return res.status(400).json({
+                status: false,
+                message: "No fields to update"
+            });
+        }
+
         values.push(userId);
 
-        const updateQuery = {
-            text: `UPDATE tbluser SET ${updates.join(', ')} WHERE id = $${valueCount} RETURNING *`,
-            values: values
-        };
+        const query = `
+            UPDATE tbluser 
+            SET ${updates.join(', ')} 
+            WHERE id = $${valueCount} 
+            RETURNING *
+        `;
 
-        const updatedUser = await pool.query(updateQuery);
-        
+        const updatedUser = await pool.query(query, values);
+
         if (updatedUser.rows.length === 0) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 status: false,
-                message: "User not found" 
+                message: "User not found"
             });
         }
 
@@ -97,26 +108,29 @@ export const updateUser = async (req, res) => {
         const userResponse = { ...updatedUser.rows[0] };
         delete userResponse.password;
 
-        return res.status(200).json({ 
+        return res.status(200).json({
             status: true,
             message: "User updated successfully",
             user: userResponse
         });
-        
+
     } catch (error) {
-        console.log(error);
-        return res.status(400).json({ 
+        console.error('Update user error:', error);
+        return res.status(400).json({
             status: false,
-            error: error.message
+            message: error.message
         });
     }
-}
+};
 
 export const changePasswordOfUser = async (req, res) => {
     try {
         const {userId} = req.body.user;
         const { id } = req.params;
         const {currentPassword, newPassword, confirmPassword} = req.body;
+        // console.log('Current Password:', currentPassword);
+        // console.log('New Password:', newPassword);
+        // console.log('Confirm Password:', confirmPassword);
         const user = await pool.query({
             text: 'SELECT * FROM tbluser WHERE id = $1',
             values: [userId]
@@ -127,6 +141,7 @@ export const changePasswordOfUser = async (req, res) => {
                 message: "User not found" 
             });
         }
+        
         if(newPassword !== confirmPassword) {
             return res.status(400).json({ 
                 status: false,

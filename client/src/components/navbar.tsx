@@ -50,12 +50,12 @@ import {
             <div className="flex items-center gap-2 transition duration-150 ease-in-out">
               <div className="flex items-center justify-center w-10 h-10 text-white rounded-full cursor-pointer 2xl:w-12 2xl:h-12 bg-gradient-to-br from-blue-500 to-blue-700 hover:shadow-lg hover:shadow-blue-500/30">
                 <p className="text-2xl font-bold">
-                  {user?.firstName?.charAt(0)}
+                  {user?.firstname?.charAt(0)}
                 </p>
               </div>
               <div className="hidden text-left md:block">
                 <p className="text-base font-medium text-gray-800 dark:text-gray-300">
-                  {user?.firstName}
+                  {user?.firstname}
                 </p>
                 <span className="text-sm text-gray-600 dark:text-gray-400">
                   {user?.email}
@@ -72,12 +72,12 @@ import {
               <div className="flex w-full gap-3">
                 <div className="flex items-center justify-center w-10 h-10 text-white rounded-full bg-gradient-to-br from-blue-500 to-blue-700">
                   <p className="text-2xl font-bold">
-                    {user?.firstName?.charAt(0)}
+                    {user?.firstname?.charAt(0)}
                   </p>
                 </div>
                 <div className="w-full">
                   <p className="text-gray-800 dark:text-gray-200 text-sm font-semibold">
-                    {user?.firstName} {user?.lastName}
+                    {user?.firstname} {user?.lastname}
                   </p>
                   <span className="text-xs text-gray-500 dark:text-gray-400 block overflow-ellipsis">
                     {user?.email}

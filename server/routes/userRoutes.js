@@ -4,7 +4,7 @@ import { getUser, updateUser, changePasswordOfUser } from '../controllers/userCo
 const router = express.Router();
 
 router.get('/', authMiddleware, getUser);
-router.get('/change-password', authMiddleware, changePasswordOfUser);
+router.put('/change-password', authMiddleware, changePasswordOfUser);
 // router.get('/:id', authMiddleware, getUserById);
 router.put('/:id', authMiddleware, updateUser);
 

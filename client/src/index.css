@@ -64,3 +64,31 @@
     @apply bg-background text-foreground;
   }
 }
+@layer components {
+  .inputStyles {
+    @apply bg-transparent 
+           appearance-none 
+           border 
+           border-gray-300
+           ring-blue-500
+           dark:text-gray-500 
+           outline-none 
+           focus:ring-1
+           dark:border-gray-800 
+           rounded 
+           w-full 
+           py-2 
+           px-3 
+           text-gray-700
+           dark:placeholder:text-gray-700;
+  }
+
+  .labelStyles {
+    @apply block
+           text-gray-700
+           dark:text-gray-400 
+           text-sm 
+           md:text-base 
+           mb-2;
+  }
+}
