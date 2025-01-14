@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { Navigate, Outlet, Routes,Route  } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Navigate, Outlet, Routes, Route } from 'react-router-dom'
 import Login from './pages/auth/login'
 import Register from './pages/auth/register'
 import Dashboard from './pages/dashboard'
@@ -10,6 +10,7 @@ import AccountPage from './pages/accountPage'
 import { useStore } from './store'
 import { setAuthToken } from './libs/apiCalls'
 import { Toaster } from 'sonner';
+import Navbar from './components/Navbar'
 
 const RootLayout = () => {
   const {user} = useStore(state => state)
@@ -21,6 +22,7 @@ const RootLayout = () => {
       <Navigate to="/login" />
     ):(
       <>
+        <Navbar />
         <div className='min-h-[calc(h-screen-100px)]'>
           <Outlet />
         </div>
@@ -32,6 +34,15 @@ const RootLayout = () => {
 
 function App() {
   const [count, setCount] = useState(0)
+  const { theme } = useStore((state) => state);
+
+  useEffect(() => {
+    if (theme === "dark") {
+      document.body.classList.add("dark");
+    } else {
+      document.body.classList.remove("dark");
+    }
+  }, [theme]);
 
   return (
     <>
@@ -44,7 +55,7 @@ function App() {
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="/transactions" element={<Transactions />} />
                 <Route path="/settings" element={<SettingsPage />} />
-                <Route path="/account" element={<AccountPage />} />
+                <Route path="/accounts" element={<AccountPage />} />
 
 
               </Route>
