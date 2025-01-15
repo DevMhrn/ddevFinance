@@ -27,6 +27,17 @@ export const createAccount = async (req, res) => {
     try {
         const { userId } = req.body.user;
         const { account_name, account_balance, account_number } = req.body;
+        console.log("Account Name", account_name);
+        console.log("Account Balance", account_balance);
+        console.log("Account Number", account_number);
+
+        if (!account_name || !account_balance || !account_number) {
+            return res.status(400).json({
+                status: false,
+                message: "Please provide all required fields"
+            });
+        }
+
 
         const existingAccount = await pool.query({
             text: 'SELECT * FROM tblaccount WHERE account_name = $1 AND user_id = $2',
@@ -54,7 +65,7 @@ export const createAccount = async (req, res) => {
 
         return res.status(201).json({
             status: true,
-            message: "Account created successfully",
+            message: "${account_name} account created successfully",
             account: newAccount.rows[0]
         });
         
@@ -72,6 +83,10 @@ export const addMoneyToAccount = async (req, res) => {
         const { userId } = req.body.user;
         const { id } = req.params;
         const { amount } = req.body;
+        console.log("Account ID", id);
+        console.log("Amount", amount);
+        
+
         if (isNaN(amount) || amount <= 0) {
             return res.status(400).json({
                 status: false,

@@ -10,6 +10,7 @@ import RecentTransactions from '../components/recentTransactions';
 import Accounts from '../components/accounts';
 
 
+
 const Dashboard = () => {
     const [data, setData] = useState({
         availableBalance: 0,
@@ -24,11 +25,17 @@ const Dashboard = () => {
     const fetchDashboardStats = async () => {
         try {
             setIsLoading(true);
-            const response = await api.get('/transactions/dashboard');
-            console.log(response.data);
+            const { data: res } = await api.get('/transactions/dashboard');
             
-            if (response.data.status) {
-                setData(response.data.dashboard);
+            if (res.status) {
+                setData({
+                    availableBalance: parseFloat(res.dashboard.availableBalance) || 0,
+                    totalIncome: parseFloat(res.dashboard.totalIncome) || 0,
+                    totalExpense: parseFloat(res.dashboard.totalExpense) || 0,
+                    chartData: res.dashboard.chartData || [],
+                    lastTransactions: res.dashboard.lastTransactions || [],
+                    lastAccounts: res.dashboard.lastAccounts || []
+                });
             }
         } catch (error) {
             console.error(error);
@@ -48,6 +55,8 @@ const Dashboard = () => {
 
     useEffect(() => {
         fetchDashboardStats();
+        const interval = setInterval(fetchDashboardStats, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     if (isLoading) {
@@ -65,11 +74,9 @@ const Dashboard = () => {
                 subTitle="Monitor your financial activities" 
             />
             <Stats 
-                dt={{
-                    balance: data?.availableBalance,
-                    income: data?.totalIncome,
-                    expense: data?.totalExpense,
-                }}
+                balance={data.availableBalance}
+                income={data.totalIncome}
+                expense={data.totalExpense}
             />
             <div className="flex flex-col-reverse items-center gap-10 w-full md:flex-row">
                 <Chart data={data?.chartData} />

@@ -15,28 +15,63 @@ export const getTransactions = async (req, res) => {
         const sevenDaysAgo = new Date(today);
         sevenDaysAgo.setDate(today.getDate() - 7);
 
-        const startDate = new Date(df || sevenDaysAgo);
-        const endDate = new Date(dt || today);
+        const startDate = df ? new Date(df) : sevenDaysAgo;
+        const endDate = dt ? new Date(dt) : today;
+        
+        // Add time to dates for complete day coverage
+        startDate.setHours(0, 0, 0, 0);
+        endDate.setHours(23, 59, 59, 999);
 
-        const transactions = await pool.query({
-            text: `SELECT * FROM tbltransaction 
-                   WHERE user_id = $1 
-                   AND createdat BETWEEN $2 AND $3 
-                   AND (description ILIKE '%' || $4 || '%' 
-                   OR status ILIKE '%' || $4 || '%' 
-                   OR source ILIKE '%' || $4 || '%') 
-                   ORDER BY id DESC`,
-            values: [userId, startDate, endDate, s || '']
-        });
+        const query = {
+            text: `
+                SELECT 
+                    t.*,
+                    to_char(t.createdat, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as createdat
+                FROM 
+                    tbltransaction t
+                WHERE 
+                    t.user_id = $1 
+                    AND t.createdat BETWEEN $2 AND $3
+                    ${s ? `AND (
+                        LOWER(t.description) LIKE LOWER($4) 
+                        OR LOWER(t.status) LIKE LOWER($4) 
+                        OR LOWER(t.source) LIKE LOWER($4)
+                    )` : ''}
+                ORDER BY 
+                    t.createdat DESC
+            `,
+            values: s 
+                ? [userId, startDate, endDate, `%${s}%`]
+                : [userId, startDate, endDate]
+        };
+
+        // console.log('Query:', {
+        //     text: query.text,
+        //     values: query.values,
+        //     userId,
+        //     startDate,
+        //     endDate,
+        //     search: s
+        // });
+
+        const transactions = await pool.query(query);
 
         return res.status(200).json({
             status: true,
-            transactions: transactions.rows
+            data: transactions.rows,
+            meta: {
+                total: transactions.rows.length,
+                dateRange: {
+                    from: startDate,
+                    to: endDate
+                }
+            }
         });
     } catch (error) {
-        console.log(error);
-        return res.status(400).json({
+        console.error('Transaction fetch error:', error);
+        return res.status(500).json({
             status: false,
+            message: "Failed to fetch transactions",
             error: error.message
         });
     }
@@ -214,6 +249,8 @@ export const addTransaction = async (req, res) => {
 };
 
 export const transferMoneyToAccount = async (req, res) => {
+    const client = await pool.connect(); // Get a dedicated client for transaction
+
     try {
         const { userId } = req.body.user;
         const { from_account, to_account, amount } = req.body;
@@ -233,102 +270,102 @@ export const transferMoneyToAccount = async (req, res) => {
             });
         }
 
-        // Begin transaction
-        await pool.query('BEGIN');
-        try {
-            const [fromAccountResult, toAccountResult] = await Promise.all([
-                pool.query({
-                    text: 'SELECT * FROM tblaccount WHERE id = $1 AND user_id = $2',
-                    values: [from_account, userId]
-                }),
-                pool.query({
-                    text: 'SELECT * FROM tblaccount WHERE id = $1 AND user_id = $2',
-                    values: [to_account, userId]
-                })
-            ]);
+        await client.query('BEGIN'); // Begin transaction
 
-            if (fromAccountResult.rows.length === 0 || toAccountResult.rows.length === 0) {
-                await pool.query('ROLLBACK');
-                return res.status(404).json({
-                    status: false,
-                    message: "One or both accounts not found or unauthorized"
-                });
-            }
+        // Get both accounts with FOR UPDATE to lock rows
+        const [fromAccountResult, toAccountResult] = await Promise.all([
+            client.query({
+                text: 'SELECT * FROM tblaccount WHERE id = $1 AND user_id = $2 FOR UPDATE',
+                values: [from_account, userId]
+            }),
+            client.query({
+                text: 'SELECT * FROM tblaccount WHERE id = $1 AND user_id = $2 FOR UPDATE',
+                values: [to_account, userId]
+            })
+        ]);
 
-            const fromAccount = fromAccountResult.rows[0];
-            const toAccount = toAccountResult.rows[0];
-
-            if (fromAccount.account_balance < numericAmount) {
-                await pool.query('ROLLBACK');
-                return res.status(400).json({
-                    status: false,
-                    message: "Insufficient balance in source account"
-                });
-            }
-
-            // Update both accounts
-            await Promise.all([
-                pool.query({
-                    text: `UPDATE tblaccount 
-                           SET account_balance = account_balance - $1,
-                               updatedat = CURRENT_TIMESTAMP 
-                           WHERE id = $2`,
-                    values: [numericAmount, from_account]
-                }),
-                pool.query({
-                    text: `UPDATE tblaccount 
-                           SET account_balance = account_balance + $1,
-                               updatedat = CURRENT_TIMESTAMP 
-                           WHERE id = $2`,
-                    values: [numericAmount, to_account]
-                })
-            ]);
-
-            // Record both transactions
-            await Promise.all([
-                pool.query({
-                    text: `INSERT INTO tbltransaction 
-                           (user_id, description, type, status, amount, source)
-                           VALUES ($1, $2, $3, $4, $5, $6)`,
-                    values: [
-                        userId,
-                        `Transfer to ${toAccount.account_name}`,
-                        'expense',
-                        'Completed',
-                        numericAmount,
-                        fromAccount.account_name
-                    ]
-                }),
-                pool.query({
-                    text: `INSERT INTO tbltransaction 
-                           (user_id, description, type, status, amount, source)
-                           VALUES ($1, $2, $3, $4, $5, $6)`,
-                    values: [
-                        userId,
-                        `Transfer from ${fromAccount.account_name}`,
-                        'income',
-                        'Completed',
-                        numericAmount,
-                        toAccount.account_name
-                    ]
-                })
-            ]);
-
-            await pool.query('COMMIT');
-
-            return res.status(201).json({
-                status: true,
-                message: "Transfer completed successfully"
+        if (fromAccountResult.rows.length === 0 || toAccountResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({
+                status: false,
+                message: "One or both accounts not found or unauthorized"
             });
-        } catch (error) {
-            await pool.query('ROLLBACK');
-            throw error;
         }
+
+        const fromAccount = fromAccountResult.rows[0];
+        const toAccount = toAccountResult.rows[0];
+
+        if (fromAccount.account_balance < numericAmount) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({
+                status: false,
+                message: "Insufficient balance in source account"
+            });
+        }
+
+        // Update accounts one at a time to ensure consistency
+        await client.query({
+            text: `UPDATE tblaccount 
+                   SET account_balance = account_balance - $1,
+                       updatedat = CURRENT_TIMESTAMP 
+                   WHERE id = $2 RETURNING *`,
+            values: [numericAmount, from_account]
+        });
+
+        await client.query({
+            text: `UPDATE tblaccount 
+                   SET account_balance = account_balance + $1,
+                       updatedat = CURRENT_TIMESTAMP 
+                   WHERE id = $2 RETURNING *`,
+            values: [numericAmount, to_account]
+        });
+
+        // Record transactions
+        await Promise.all([
+            client.query({
+                text: `INSERT INTO tbltransaction 
+                       (user_id, description, type, status, amount, source)
+                       VALUES ($1, $2, $3, $4, $5, $6)`,
+                values: [
+                    userId,
+                    `Transfer to ${toAccount.account_name}`,
+                    'expense',
+                    'Completed',
+                    numericAmount,
+                    fromAccount.account_name
+                ]
+            }),
+            client.query({
+                text: `INSERT INTO tbltransaction 
+                       (user_id, description, type, status, amount, source)
+                       VALUES ($1, $2, $3, $4, $5, $6)`,
+                values: [
+                    userId,
+                    `Transfer from ${fromAccount.account_name}`,
+                    'income',
+                    'Completed',
+                    numericAmount,
+                    toAccount.account_name
+                ]
+            })
+        ]);
+
+        await client.query('COMMIT');
+
+        return res.status(201).json({
+            status: true,
+            message: "Transfer completed successfully"
+        });
+
     } catch (error) {
-        console.log(error);
-        return res.status(400).json({
+        await client.query('ROLLBACK');
+        console.error("Transfer error:", error);
+        return res.status(500).json({
             status: false,
+            message: "Transfer failed. Please try again.",
             error: error.message
         });
+    } finally {
+        client.release(); // Release the client back to the pool
     }
 };
